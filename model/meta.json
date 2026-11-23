@@ -9,5 +9,7 @@
   "n_layer": 6,
   "n_head": 6,
   "n_embd": 384,
-  "dtype": "fp16"
+  "dtype": "fp16",
+  "onnx_dtype": "fp16",
+  "onnx_bytes": 27896309
 }

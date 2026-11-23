@@ -1,49 +1,242 @@
 /**
- * In-browser inference with onnxruntime-web.
+ * In-browser inference with onnxruntime-web (WASM only).
+ *
  * The ONNX model takes token ids (int64, shape [1, seq]) and returns
  * next-token logits (float32, shape [1, vocab]).
+ *
+ * We never load the WebGPU/JSEP build. A failed WebGPU initWasm() would
+ * poison the runtime so the WASM backend also reports
+ * "previous call to 'initWasm()' failed."
+ *
+ * GitHub Pages and Android WebView are not cross-origin isolated, so
+ * SharedArrayBuffer / multi-threaded WASM is unavailable. We force
+ * numThreads = 1 and proxy = false. If the device also lacks WASM SIMD,
+ * we fall back to onnxruntime-web 1.18, which still ships a non-SIMD build.
  */
 
 import { END_OF_TEXT } from "./tokenizer.js";
 
-const ORT_VERSION = "1.21.0";
-const LOCAL_ORT = new URL("./ort/", import.meta.url).href;
-const CDN_ORT = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
+const ORT_PRIMARY = {
+  id: "wasm-simd-1.21",
+  version: "1.21.0",
+  // WASM-only entry. Do not use ort.min.mjs (that bundle also registers WebGPU).
+  entry: "ort.wasm.min.mjs",
+  mjs: "ort-wasm-simd-threaded.mjs",
+  wasm: "ort-wasm-simd-threaded.wasm",
+  cdnDist: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/",
+  localDir: new URL("./ort/", import.meta.url).href,
+  simd: true,
+};
 
-let ortPromise = null;
+const ORT_LEGACY = {
+  id: "wasm-nosimd-1.18",
+  version: "1.18.0",
+  // 1.18's ESM wasm-only build still includes ort-wasm.wasm (no SIMD).
+  entry: "ort.wasm.min.js",
+  wasm: "ort-wasm.wasm",
+  cdnEntry: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/esm/ort.wasm.min.js",
+  cdnDist: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/",
+  localDir: new URL("./ort/legacy/", import.meta.url).href,
+  simd: false,
+};
+
+export function wasmSimdSupported() {
+  try {
+    // Official onnxruntime-web SIMD probe (16 zero bytes after v128.const).
+    return WebAssembly.validate(
+      new Uint8Array([
+        0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 2, 1, 0, 10, 30, 1, 28, 0, 65, 0, 253, 15,
+        253, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 253, 186, 1, 26, 11,
+      ])
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function collectDiagnostics() {
+  let sabPostable = false;
+  try {
+    if (typeof SharedArrayBuffer !== "undefined" && typeof MessageChannel !== "undefined") {
+      new MessageChannel().port1.postMessage(new SharedArrayBuffer(1));
+      sabPostable = true;
+    }
+  } catch {
+    sabPostable = false;
+  }
+  return {
+    crossOriginIsolated: globalThis.crossOriginIsolated === true,
+    hasSharedArrayBuffer: typeof SharedArrayBuffer !== "undefined",
+    sabPostable,
+    wasmSimd: wasmSimdSupported(),
+    webgpu: typeof navigator !== "undefined" && Boolean(navigator.gpu),
+    userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+    deviceMemory: typeof navigator !== "undefined" ? navigator.deviceMemory : undefined,
+    hardwareConcurrency: typeof navigator !== "undefined" ? navigator.hardwareConcurrency : undefined,
+  };
+}
+
+function joinUrl(base, name) {
+  return new URL(name, base.endsWith("/") ? base : base + "/").href;
+}
+
+async function urlExists(url) {
+  try {
+    const res = await fetch(url, { method: "GET", headers: { Range: "bytes=0-0" } });
+    if (res.ok || res.status === 206) return true;
+    // Some WebViews ignore Range and still return 200 only for a full GET.
+    if (res.status === 405 || res.status === 501) {
+      const again = await fetch(url, { method: "GET" });
+      return again.ok;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveConfig(spec) {
+  const localEntryName = spec.entry;
+  const localEntry = joinUrl(spec.localDir, localEntryName);
+  const usedLocal = await urlExists(localEntry);
+  if (spec.id === "wasm-simd-1.21") {
+    const base = usedLocal ? spec.localDir : spec.cdnDist;
+    const entry = joinUrl(base, spec.entry);
+    const mjs = joinUrl(base, spec.mjs);
+    const wasm = joinUrl(base, spec.wasm);
+    return {
+      spec,
+      source: usedLocal ? "local" : "cdn",
+      entry,
+      wasmPaths: { mjs, wasm },
+      files: [entry, mjs, wasm],
+    };
+  }
+  const entry = usedLocal ? localEntry : spec.cdnEntry;
+  const dist = usedLocal ? spec.localDir : spec.cdnDist;
+  const wasm = joinUrl(dist, spec.wasm);
+  // Map every 1.18 filename ORT might ask for onto the non-SIMD build we ship,
+  // in case a default simd=true still slips through.
+  const wasmPaths = {
+    "ort-wasm.wasm": wasm,
+    "ort-wasm-simd.wasm": wasm,
+    "ort-wasm-threaded.wasm": wasm,
+    "ort-wasm-simd-threaded.wasm": wasm,
+  };
+  return {
+    spec,
+    source: usedLocal ? "local" : "cdn",
+    entry,
+    wasmPaths,
+    files: [entry, wasm],
+  };
+}
+
+function applyWasmFlags(ort, wasmPaths, opts) {
+  // Set these before the first InferenceSession.create() so initWasm()
+  // never starts a worker or a proxy. ORT 1.18 defaults simd to true and
+  // will 404 ort-wasm-simd.wasm unless we force the non-SIMD filename.
+  const simd = opts && opts.simd === false ? false : opts && opts.simd === true;
+  ort.env.wasm.numThreads = 1;
+  ort.env.wasm.proxy = false;
+  if (opts && opts.simd === false) {
+    ort.env.wasm.simd = false;
+  }
+  ort.env.wasm.wasmPaths = wasmPaths;
+}
+
+const ORT_SIMD_PROBE = new Uint8Array([
+  0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 2, 1, 0, 10, 30, 1, 28, 0, 65, 0, 253, 15,
+  253, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 253, 186, 1, 26, 11,
+]);
+
+function wasmSimdProbeOfficial() {
+  try {
+    return WebAssembly.validate(ORT_SIMD_PROBE);
+  } catch {
+    return false;
+  }
+}
+
+function probeBytesEqual(buf) {
+  const u = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  if (u.length !== ORT_SIMD_PROBE.length) return false;
+  for (let i = 0; i < u.length; i++) if (u[i] !== ORT_SIMD_PROBE[i]) return false;
+  return true;
+}
+
+let simdProbePatched = false;
 
 /**
- * Prefer a vendored copy of onnxruntime-web (bundled in the Android app so
- * chat works offline). Fall back to the jsDelivr CDN for GitHub Pages.
+ * Some Chromium/WebView builds can compile ORT's SIMD wasm even though
+ * WebAssembly.validate() rejects ORT's tiny feature-probe module. 1.21
+ * then throws "WebAssembly SIMD is not supported" and never loads. If
+ * the real simd wasm compiles, patch only that exact probe.
  */
-async function loadOrt() {
-  if (ortPromise) return ortPromise;
-  ortPromise = (async () => {
-    const localEntry = new URL("ort.min.mjs", LOCAL_ORT).href;
-    let base = CDN_ORT;
-    let mod;
-    try {
-      mod = await import(localEntry);
-      base = LOCAL_ORT;
-    } catch {
-      mod = await import(`${CDN_ORT}ort.min.mjs`);
-      base = CDN_ORT;
-    }
-    const ort = mod.default ?? mod;
-    ort.env.wasm.wasmPaths = base;
-    // GitHub Pages cannot send COOP/COEP headers, and many Android WebViews
-    // cannot either, so keep WASM single-threaded.
-    ort.env.wasm.numThreads = 1;
-    ort.env.wasm.simd = true;
-    return ort;
-  })();
-  return ortPromise;
+async function enableOrtSimdProbeIfWasmWorks(wasmUrl) {
+  if (wasmSimdProbeOfficial()) return { ok: true, patched: false };
+  try {
+    const res = await fetch(wasmUrl);
+    if (!res.ok) return { ok: false, patched: false, failedFile: wasmUrl, status: res.status };
+    const buf = await res.arrayBuffer();
+    await WebAssembly.compile(buf);
+  } catch (err) {
+    return { ok: false, patched: false, failedFile: wasmUrl, error: err && err.message ? err.message : String(err) };
+  }
+  if (!simdProbePatched) {
+    const orig = WebAssembly.validate.bind(WebAssembly);
+    WebAssembly.validate = (bytes) => {
+      try {
+        if (orig(bytes)) return true;
+      } catch {
+        /* ignore */
+      }
+      try {
+        if (probeBytesEqual(bytes)) return true;
+      } catch {
+        /* ignore */
+      }
+      return false;
+    };
+    simdProbePatched = true;
+  }
+  return { ok: true, patched: true };
+}
+
+async function importOrt(entryUrl, cacheBust) {
+  const url = cacheBust ? `${entryUrl}${entryUrl.includes("?") ? "&" : "?"}bust=${cacheBust}` : entryUrl;
+  const mod = await import(url);
+  return mod.default ?? mod;
+}
+
+function formatOrtError(err, diags, attempts) {
+  const detail = err && err.message ? err.message : String(err);
+  const attemptLines = attempts
+    .map((a) => `  - ${a.id} (${a.source}): ${a.error || a.status}`)
+    .join("\n");
+  return [
+    "The model runtime could not start in this browser.",
+    "",
+    detail,
+    "",
+    "Diagnostics:",
+    `  crossOriginIsolated: ${diags.crossOriginIsolated}`,
+    `  SharedArrayBuffer: ${diags.hasSharedArrayBuffer} (postable: ${diags.sabPostable})`,
+    `  WASM SIMD: ${diags.wasmSimd} (compile: ${diags.wasmSimdCompile ?? "?"}, probePatched: ${diags.wasmSimdPatched ?? false})`,
+    `  WebGPU: ${diags.webgpu}`,
+    `  memory: ${diags.deviceMemory ?? "?"} GB, cores: ${diags.hardwareConcurrency ?? "?"}`,
+    "",
+    "Attempts:",
+    attemptLines,
+    "",
+    "Pages and the Android app are not cross-origin isolated, so the app uses a single-thread WASM build. If SIMD is missing, a non-SIMD fallback is tried.",
+  ].join("\n");
 }
 
 export async function fetchWithProgress(url, onProgress) {
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`Could not download the model (${res.status}). Has a training run exported model.onnx yet?`);
+    throw new Error(`Could not download the model (${res.status} from ${url}).`);
   }
   const total = Number(res.headers.get("content-length")) || 0;
   if (!res.body) {
@@ -70,21 +263,77 @@ export async function fetchWithProgress(url, onProgress) {
   return out.buffer;
 }
 
+let loadedOrt = null;
+
+/**
+ * Create a WASM inference session. Never uses WebGPU.
+ * Retries with the non-SIMD ORT 1.18 build if the primary init fails
+ * (or if this device has no WASM SIMD).
+ */
 export async function createSession(modelUrl, onProgress) {
-  const ort = await loadOrt();
+  const diags = collectDiagnostics();
   const buffer = await fetchWithProgress(modelUrl, onProgress);
-  const providers = [];
-  if (navigator.gpu) providers.push("webgpu");
-  providers.push("wasm");
-  try {
-    return await ort.InferenceSession.create(buffer, { executionProviders: providers });
-  } catch (err) {
-    if (providers.includes("webgpu")) {
-      console.warn("WebGPU failed, falling back to WASM", err);
-      return await ort.InferenceSession.create(buffer, { executionProviders: ["wasm"] });
+  // Always try the 1.21 SIMD build first (after confirming or patching the
+  // SIMD probe), then the 1.18 non-SIMD build. Do not skip 1.21 only because
+  // the official tiny probe is a false negative on some Chromium builds.
+  const specs = [ORT_PRIMARY, ORT_LEGACY];
+  const attempts = [];
+  let lastErr = null;
+
+  for (const spec of specs) {
+    const cfg = await resolveConfig(spec);
+    const record = { id: spec.id, source: cfg.source, entry: cfg.entry, error: "", status: "trying" };
+    attempts.push(record);
+    try {
+      const missing = [];
+      for (const file of cfg.files) {
+        if (!(await urlExists(file))) missing.push(file);
+      }
+      if (missing.length) {
+        throw new Error(`Required runtime file not found: ${missing.join(", ")}`);
+      }
+      if (spec.simd) {
+        const wasmUrl = cfg.wasmPaths.wasm || cfg.files[cfg.files.length - 1];
+        const probe = await enableOrtSimdProbeIfWasmWorks(wasmUrl);
+        diags.wasmSimdPatched = Boolean(probe.patched);
+        diags.wasmSimdCompile = Boolean(probe.ok);
+        if (!probe.ok) {
+          throw new Error(
+            `WASM SIMD runtime file failed to compile or download: ${probe.failedFile || wasmUrl}` +
+              (probe.status ? ` (HTTP ${probe.status})` : "") +
+              (probe.error ? ` (${probe.error})` : "")
+          );
+        }
+      }
+      const ort = await importOrt(cfg.entry, attempts.filter((a) => a.status === "failed").length ? String(Date.now()) : "");
+      applyWasmFlags(ort, cfg.wasmPaths, { simd: spec.simd });
+      const session = await ort.InferenceSession.create(buffer, {
+        executionProviders: ["wasm"],
+      });
+      record.status = "ok";
+      loadedOrt = ort;
+      session._ownGptOrt = { id: spec.id, source: cfg.source, diagnostics: diags };
+      return session;
+    } catch (err) {
+      lastErr = err;
+      record.status = "failed";
+      record.error = err && err.message ? err.message : String(err);
+      console.warn(`ORT ${spec.id} failed:`, err);
     }
-    throw err;
   }
+
+  throw new Error(formatOrtError(lastErr, diags, attempts));
+}
+
+export async function loadOrt() {
+  // Kept for generateNextTokens, which only needs the Tensor constructor.
+  if (loadedOrt) return loadedOrt;
+  const spec = wasmSimdSupported() ? ORT_PRIMARY : ORT_LEGACY;
+  const cfg = await resolveConfig(spec);
+  const ort = await importOrt(cfg.entry);
+  applyWasmFlags(ort, cfg.wasmPaths, { simd: spec.simd });
+  loadedOrt = ort;
+  return ort;
 }
 
 function sampleLogits(logits, temperature, topK) {
@@ -144,7 +393,6 @@ export async function generateNextTokens(session, tokenizer, promptIds, options)
     const tensor = new ort.Tensor("int64", input, [1, ctx.length]);
     const result = await session.run({ tokens: tensor });
     const logitsData = result.logits.data;
-    // Shape is [1, vocab] (or occasionally [1, 1, vocab] if the exporter wraps it).
     const vocab = tokenizer.vocabSize;
     let logits;
     if (logitsData.length === vocab) {
@@ -181,7 +429,6 @@ export function buildChatPrompt(history, userMessage) {
 
 export function extractReply(text) {
   let reply = text;
-  // The prompt already ended with "Assistant:", so `text` is only the continuation.
   if (reply.toLowerCase().startsWith("assistant:")) {
     reply = reply.slice("assistant:".length);
   }

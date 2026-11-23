@@ -124,7 +124,8 @@ jobs:
           mkdir -p _site/model
           cp -a web/. _site/
           cp -f model/tokenizer.json model/model.onnx model/meta.json _site/model/ 2>/dev/null || true
-          ls -lh _site/model
+          node scripts/vendor-ort.mjs --dest _site/js/ort
+          ls -lh _site/model _site/js/ort _site/js/ort/legacy || true
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

@@ -117,7 +117,7 @@ els.form.addEventListener("submit", async (event) => {
     history.push({ user: message, assistant: reply });
     if (history.length > 4) history.shift();
   } catch (err) {
-    body.textContent = `Something went wrong: ${err.message || err}`;
+    body.textContent = err.message || String(err);
   } finally {
     abortController = null;
     syncControls();
@@ -156,7 +156,8 @@ async function boot() {
     const step = meta.step != null ? `step ${meta.step}` : "ready";
     const params = meta.n_params ? `${Number(meta.n_params).toLocaleString()} parameters` : "";
     const val = meta.val_loss != null ? `val loss ${Number(meta.val_loss).toFixed(3)}` : "";
-    const bits = [step, params, val].filter(Boolean).join(" · ");
+    const runtime = session._ownGptOrt ? session._ownGptOrt.id : "";
+    const bits = [step, params, val, runtime].filter(Boolean).join(" · ");
     setStatus(`Model is running in your browser. ${bits}`, "ready");
     els.progress.hidden = true;
     ready = true;

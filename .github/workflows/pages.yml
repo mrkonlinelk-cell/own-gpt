@@ -24,6 +24,11 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Assemble the site
         run: |
           mkdir -p _site/model
@@ -31,7 +36,8 @@ jobs:
           if [ -f model/tokenizer.json ]; then cp model/tokenizer.json _site/model/; fi
           if [ -f model/model.onnx ]; then cp model/model.onnx _site/model/; fi
           if [ -f model/meta.json ]; then cp model/meta.json _site/model/; fi
-          ls -lh _site _site/model || true
+          node scripts/vendor-ort.mjs --dest _site/js/ort
+          ls -lh _site/model _site/js/ort _site/js/ort/legacy || true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

@@ -59,24 +59,45 @@ def export_onnx(output: Path, opset: int = 17, check: bool = True) -> Path:
     size_mb = output.stat().st_size / (1024 * 1024)
     print(f"Wrote {output} ({size_mb:.1f} MB)")
 
-    if check:
-        # Compare PyTorch vs ONNX Runtime on a couple of sequence lengths.
-        import numpy as np
-        import onnxruntime as ort
+    import numpy as np
+    import onnxruntime as ort
 
-        sess = ort.InferenceSession(str(output), providers=["CPUExecutionProvider"])
+    def _compare(onnx_path: Path, tag: str, limit: float) -> None:
+        sess = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
         for length in (1, 8, dummy_len, min(64, block_size)):
             ids = torch.randint(0, model.config.vocab_size, (1, length), dtype=torch.long)
             with torch.no_grad():
                 torch_logits = wrapper(ids).numpy()
-            ort_logits = sess.run(None, {"tokens": ids.numpy()})[0]
+            ort_logits = sess.run(None, {"tokens": ids.numpy()})[0].astype(np.float32)
             max_diff = float(np.max(np.abs(torch_logits - ort_logits)))
-            print(f"  length {length:3d}: max |pt-onnx| = {max_diff:.5g}")
-            if max_diff > 1e-3:
-                raise SystemExit(f"ONNX mismatch too large at length {length}: {max_diff}")
-        print("ONNX matches PyTorch closely enough.")
-        _ = tok  # tokenizer is not needed for the graph, but must exist beside the weights
-        _ = ckpt
+            agree = float(np.mean(np.argmax(torch_logits, axis=-1) == np.argmax(ort_logits, axis=-1)))
+            print(f"  {tag} length {length:3d}: max |pt-onnx| = {max_diff:.5g}  argmax_agree={agree:.3f}")
+            if max_diff > limit:
+                raise SystemExit(f"ONNX {tag} mismatch too large at length {length}: {max_diff}")
+
+    if check:
+        _compare(output, "fp32", 1e-3)
+        print("ONNX fp32 matches PyTorch closely enough.")
+
+    # Convert to fp16 for the browser/APK (~half the size, much easier on phones).
+    # Keep int64 inputs and float32 logits so the JS runtime does not change.
+    try:
+        import onnx
+        from onnxconverter_common import float16 as _f16
+    except ImportError:
+        print("onnxconverter-common not installed; leaving a float32 ONNX file.")
+    else:
+        fp32_model = onnx.load(str(output))
+        fp16_model = _f16.convert_float_to_float16(fp32_model, keep_io_types=True)
+        onnx.save(fp16_model, str(output))
+        size_mb = output.stat().st_size / (1024 * 1024)
+        print(f"Converted to fp16 -> {output} ({size_mb:.1f} MB)")
+        if check:
+            _compare(output, "fp16", 2e-2)
+            print("ONNX fp16 is close enough to PyTorch (argmax should match).")
+
+    _ = tok
+    _ = ckpt
     return output
 
 

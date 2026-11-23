@@ -22,3 +22,6 @@ data/processed/LICENSE_NOTES.txt
 
 # Local training logs
 logs/
+
+# Vendored ONNX Runtime Web (copied at Pages / APK build time)
+web/js/ort/
