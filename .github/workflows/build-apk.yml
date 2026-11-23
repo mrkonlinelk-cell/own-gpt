@@ -1,0 +1,109 @@
+name: Build APK
+
+# Rebuild the Android app. When the signing secrets are set, the APK is a
+# release-signed build and can be attached to a GitHub Release. The
+# keystore itself is never stored in this repository.
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "If secrets are set, attach the APK to a GitHub Release tag (e.g. v1.0.1). Leave blank to only upload a workflow artifact."
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: android-app/package-lock.json
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install npm dependencies
+        working-directory: android-app
+        run: npm ci
+
+      - name: Assemble web assets and sync Capacitor
+        working-directory: android-app
+        run: |
+          npm run assemble
+          npx cap sync android
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+
+      - name: Configure release signing (optional)
+        env:
+          OWN_GPT_KEYSTORE_BASE64: ${{ secrets.OWN_GPT_KEYSTORE_BASE64 }}
+          OWN_GPT_KEYSTORE_PASSWORD: ${{ secrets.OWN_GPT_KEYSTORE_PASSWORD }}
+          OWN_GPT_KEY_ALIAS: ${{ secrets.OWN_GPT_KEY_ALIAS }}
+          OWN_GPT_KEY_PASSWORD: ${{ secrets.OWN_GPT_KEY_PASSWORD }}
+        run: |
+          if [ -z "$OWN_GPT_KEYSTORE_BASE64" ]; then
+            echo "No signing secrets — Gradle will skip the release signing config."
+            echo "signed=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "$OWN_GPT_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/own-gpt.p12"
+          {
+            echo "storeFile=$RUNNER_TEMP/own-gpt.p12"
+            echo "storePassword=$OWN_GPT_KEYSTORE_PASSWORD"
+            echo "keyAlias=$OWN_GPT_KEY_ALIAS"
+            echo "keyPassword=$OWN_GPT_KEY_PASSWORD"
+          } > "$RUNNER_TEMP/keystore.properties"
+          echo "OWN_GPT_KEYSTORE_PROPERTIES=$RUNNER_TEMP/keystore.properties" >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_ENV"
+
+      - name: Build release APK
+        working-directory: android-app/android
+        run: ./gradlew assembleRelease --no-daemon
+        env:
+          OWN_GPT_KEYSTORE_PROPERTIES: ${{ env.OWN_GPT_KEYSTORE_PROPERTIES }}
+
+      - name: Rename APK
+        run: |
+          mkdir -p dist
+          SRC="android-app/android/app/build/outputs/apk/release/app-release.apk"
+          if [ ! -f "$SRC" ]; then
+            # Unsigned / debug-fallback name used by some AGP versions
+            SRC=$(find android-app/android/app/build/outputs/apk -name '*.apk' | head -1)
+          fi
+          cp "$SRC" dist/own-gpt.apk
+          ls -lh dist/own-gpt.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: own-gpt-apk
+          path: dist/own-gpt.apk
+
+      - name: Attach to a GitHub Release
+        if: ${{ github.event.inputs.release != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.release }}
+        run: |
+          NOTES="Android APK for Own GPT (${TAG}). Chat and Train pages in a WebView; the ONNX model is bundled. Requires Android 8 or later."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/own-gpt.apk --clobber
+          else
+            gh release create "$TAG" dist/own-gpt.apk --title "Own GPT ${TAG} (Android)" --notes "$NOTES"
+          fi

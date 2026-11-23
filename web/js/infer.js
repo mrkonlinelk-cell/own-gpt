@@ -4,14 +4,41 @@
  * next-token logits (float32, shape [1, vocab]).
  */
 
-import * as ort from "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.min.mjs";
 import { END_OF_TEXT } from "./tokenizer.js";
 
 const ORT_VERSION = "1.21.0";
-ort.env.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
-// GitHub Pages cannot send COOP/COEP headers, so multi-threaded WASM is unavailable.
-ort.env.wasm.numThreads = 1;
-ort.env.wasm.simd = true;
+const LOCAL_ORT = new URL("./ort/", import.meta.url).href;
+const CDN_ORT = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
+
+let ortPromise = null;
+
+/**
+ * Prefer a vendored copy of onnxruntime-web (bundled in the Android app so
+ * chat works offline). Fall back to the jsDelivr CDN for GitHub Pages.
+ */
+async function loadOrt() {
+  if (ortPromise) return ortPromise;
+  ortPromise = (async () => {
+    const localEntry = new URL("ort.min.mjs", LOCAL_ORT).href;
+    let base = CDN_ORT;
+    let mod;
+    try {
+      mod = await import(localEntry);
+      base = LOCAL_ORT;
+    } catch {
+      mod = await import(`${CDN_ORT}ort.min.mjs`);
+      base = CDN_ORT;
+    }
+    const ort = mod.default ?? mod;
+    ort.env.wasm.wasmPaths = base;
+    // GitHub Pages cannot send COOP/COEP headers, and many Android WebViews
+    // cannot either, so keep WASM single-threaded.
+    ort.env.wasm.numThreads = 1;
+    ort.env.wasm.simd = true;
+    return ort;
+  })();
+  return ortPromise;
+}
 
 export async function fetchWithProgress(url, onProgress) {
   const res = await fetch(url);
@@ -44,6 +71,7 @@ export async function fetchWithProgress(url, onProgress) {
 }
 
 export async function createSession(modelUrl, onProgress) {
+  const ort = await loadOrt();
   const buffer = await fetchWithProgress(modelUrl, onProgress);
   const providers = [];
   if (navigator.gpu) providers.push("webgpu");
@@ -91,6 +119,7 @@ function sampleLogits(logits, temperature, topK) {
 }
 
 export async function generateNextTokens(session, tokenizer, promptIds, options) {
+  const ort = await loadOrt();
   const {
     maxTokens = 80,
     temperature = 0.8,

@@ -1,0 +1,20 @@
+{
+  "appId": "com.mrkonlinelk.owngpt",
+  "appName": "Own GPT",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": true,
+    "backgroundColor": "#12141a",
+    "webContentsDebuggingEnabled": false
+  },
+  "server": {
+    "androidScheme": "https",
+    "hostname": "localhost"
+  },
+  "plugins": {
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#12141a"
+    }
+  }
+}

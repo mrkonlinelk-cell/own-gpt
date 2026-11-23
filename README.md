@@ -6,6 +6,9 @@ It is a learning project, not a replacement for ChatGPT, DeepSeek, or similar sy
 
 **Live site:** <https://mrkonlinelk-cell.github.io/own-gpt/>
 
+**Android app:** [Download the APK](https://github.com/mrkonlinelk-cell/own-gpt/releases/latest) (`Own GPT`, Android 8+). The chat model is bundled in the app, so chat works offline. See `android-app/README.md` if you want to build it yourself.
+
+
 ## What’s in this repo
 
 | Path | Role |
@@ -111,6 +114,19 @@ Assistant: Once upon a time, a little river ran down a green hill...
 ```
 
 Only add text you have the right to use.
+
+
+## Android app (APK)
+
+Install **Own GPT** on a phone or tablet running Android 8.0 or later:
+
+1. Download `own-gpt.apk` from the [latest GitHub Release](https://github.com/mrkonlinelk-cell/own-gpt/releases/latest).
+2. Open the file. If Android asks, allow your browser or file manager to install unknown apps.
+3. Open **Own GPT**. The first launch can take a few seconds while the bundled model loads.
+
+Chat runs entirely on the device (no internet required after install). The Train page still talks to GitHub and needs a fine-grained personal access token, same as the website.
+
+The Capacitor project lives in `android-app/`. A **Build APK** workflow can rebuild it; signed releases need the signing secrets described in `android-app/README.md`. The keystore is not stored in this repository.
 
 ## Limits (please read)
 
