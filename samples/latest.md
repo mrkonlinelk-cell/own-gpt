@@ -1,11 +1,11 @@
 # Latest sample outputs
 
-Generated after a training run. Checkpoint: `model/model.pt` (step 1200).
+Generated after a training run. Checkpoint: `model/model.pt` (step 1837).
 
 - Parameters: 12318720
-- Val loss / best val: 2.2484395265579225
+- Val loss / best val: 2.053942883014679
 - Sampling: temperature 0.8, top-k 40, max tokens 80
-- Time (UTC): 2026-11-23 15:59:04Z
+- Time (UTC): 2026-11-23 18:56:02Z
 
 The writing is often rough. That is expected for a small model.
 
@@ -14,30 +14,30 @@ The writing is often rough. That is expected for a small model.
 ### 1. `Once upon a time`
 
 ```
-Once upon a time, there was an old man who lived in the old man. He had a big bag. He loved to play outside with his friends. One day, he saw a little bird outside. The tall man was very nice to talk and let the old man.
-The little boy tried to lift the tree, but the bird was too small. A kind man saw Tim and the old man became very
+Once upon a time, there was an old cat named Tim. Tim loved to play outside and eat yummy soup. One day, Tim saw a big box in the attic. He thought it would be fun to fill the pot with food and make a big bowl.
+As he was playing, Tim saw his friend, a little girl named Lily. Lily was looking at the box. Tim was very curious about how to
 ```
 
 ### 2. `Once upon a time, a little girl`
 
 ```
-Once upon a time, a little girl named Lily found a big, shiny coin in her room. Lily was very happy and wanted to play with something special.
-Lily opened the coin and gave it to her parents. Her parents were happy that they could have enough candy. They were happy to have a new friend to play with.
-<|endoftext|>
+Once upon a time, a little girl named Lily found a big, shiny coin in the room. She was very happy and took the coin to her mom.
+When they arrived at the kitchen, they saw many coins inside. Lily wanted the coin, but she did not know what it meant. She thought it was important.
+Lily put the coins on the shelf. She did not know what to do. She waited until the coin
 ```
 
 ### 3. `There was a small dog`
 
 ```
-There was a small dog in a park. The dog was very loyal and always scared of the dog.
-The moral of the story is that when we help our friends, we are good and good things for you.
-<|endoftext|>
+There was a small dog named Buddy. Buddy was a happy dog and could not run. Buddy saw Buddy and wanted to play too. Buddy tried to run, but Buddy was too scared.
+B Buddy's mom saw Buddy was not happy. She said, " Buddy, we need to tell everyone about the park!" Buddy listened. They walked and walked, and Buddy found a big tree. Buddy went home and told Buddy
 ```
 
 ### 4. `The little boy found`
 
 ```
-The little boy found a magic cat. He was very happy to play with the magic cat. He and the cat were best friends and were best friends.
+The little boy found a magic cat. The cat said, "I will grant you one wish." The boy was very surprised but happy. He said, "Thank you for your surprise I feel better."
+The magic cat and the magic cat became good friends. They played together every day and had lots of fun. The ugly cat was never lonely again.
 <|endoftext|>
 ```
 
@@ -45,14 +45,13 @@ The little boy found a magic cat. He was very happy to play with the magic cat. 
 
 **User:** Hello
 
-**Assistant:** Hello! I can tell stories or answer simple patterns is better.
+**Assistant:** Hello! How can I help you today?
 
 **User:** What is 2 plus 2?
 
-**Assistant:** 2 plus 2 is 11.
+**Assistant:** 2 plus 2 is 10.
 
 **User:** Tell me a short story about a cat
 
-**Assistant:** Once upon a time, there was a big cat named Tom. Tom was big and strong, but he liked to play with his ball. One day, Tom wanted to bury his ball in a bag, so he put it in his mouth.
-Tom's friend, Sam, saw his ball. They both jumped high to get it and down, trying to move the ball. They laughed and played
+**Assistant:** Lily had a tiny seed. She put it in the seed with the dirt on the dirt. She gave it water and watered it.
 
