@@ -1,9 +1,9 @@
 {
-  "step": 1096,
-  "best_val": 2.259692597389221,
+  "step": 1200,
+  "best_val": 2.195858192443848,
   "n_params": 12318720,
-  "val_loss": 2.259692597389221,
-  "train_loss": 2.150862717628479,
+  "val_loss": 2.2484395265579225,
+  "train_loss": null,
   "vocab_size": 4096,
   "block_size": 256,
   "n_layer": 6,
