@@ -1,0 +1,24 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.swp
+.venv/
+venv/
+.env
+.env.*
+*.egg-info/
+.DS_Store
+
+# Full checkpoints include optimizer state (~142MB, over GitHub's 100MB limit)
+checkpoints/*.pt
+
+# Downloaded TinyStories and generated token files (the workflow rebuilds these)
+data/raw/
+data/processed/corpus.txt
+data/processed/*.bin
+data/processed/conversations_sample.txt
+data/processed/LICENSE_NOTES.txt
+
+# Local training logs
+logs/

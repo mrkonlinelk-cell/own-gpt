@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>own-gpt — Chat</title>
+    <meta name="description" content="Chat with a tiny GPT trained from scratch. The model runs in your browser." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <div class="brand">
+          <h1>own-gpt</h1>
+          <p>A tiny language model trained from scratch. It runs here, in your browser.</p>
+        </div>
+        <nav class="tabs" aria-label="Pages">
+          <a href="index.html" aria-current="page">Chat</a>
+          <a href="train.html">Train</a>
+        </nav>
+      </header>
+
+      <main class="card">
+        <p id="status">Starting up…</p>
+        <progress id="progress" hidden value="0" max="1"></progress>
+        <div id="log" aria-live="polite">
+          <div class="bubble bubble-assistant">
+            <div class="bubble-label">Assistant</div>
+            <div class="bubble-body">This is a small model, so answers can be rough or wrong. When the model has loaded, type a message below.</div>
+          </div>
+        </div>
+
+        <form id="composer">
+          <label class="sr-only" for="message">Your message</label>
+          <textarea id="message" name="message" rows="2" placeholder="Type a message…" disabled></textarea>
+          <div class="toolbar">
+            <div class="row wrap">
+              <button type="submit" id="send" disabled>Send</button>
+              <button type="button" class="secondary" id="stop" disabled>Stop</button>
+              <button type="button" class="secondary" id="reset">New chat</button>
+            </div>
+            <button type="button" class="secondary" id="settings-toggle" aria-expanded="false">Settings</button>
+          </div>
+          <div class="settings" id="settings" hidden>
+            <label>
+              Temperature <span id="temperature-val">0.80</span>
+              <input id="temperature" type="range" min="0.1" max="1.5" step="0.05" value="0.8" />
+            </label>
+            <label>
+              Top-k
+              <input id="topk" type="number" min="1" max="4096" step="1" value="40" />
+            </label>
+            <label>
+              Max new tokens
+              <input id="maxtokens" type="number" min="8" max="256" step="1" value="80" />
+            </label>
+          </div>
+        </form>
+      </main>
+
+      <footer>
+        Replies use the same User / Assistant format the model was trained on. The model file is downloaded to your device and does not leave this page.
+      </footer>
+    </div>
+    <style>
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+      }
+    </style>
+    <script type="module" src="js/chat.js"></script>
+  </body>
+</html>

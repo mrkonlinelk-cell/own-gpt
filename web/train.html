@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>own-gpt — Train</title>
+    <meta name="description" content="Add your own text and start a training run from your phone or PC." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <div class="brand">
+          <h1>Train own-gpt</h1>
+          <p>Add text and start a GitHub Actions training run from this phone or PC.</p>
+        </div>
+        <nav class="tabs" aria-label="Pages">
+          <a href="index.html">Chat</a>
+          <a href="train.html" aria-current="page">Train</a>
+        </nav>
+      </header>
+
+      <section class="card" style="margin-bottom: 16px">
+        <h2 style="margin: 0 0 8px; font-size: 1.15rem">1. Your GitHub token</h2>
+        <div class="warning">
+          <strong>Keep this private.</strong> Use a <em>fine-grained</em> personal access token limited to the
+          <strong>own-gpt</strong> repository, with <strong>Contents: Read and write</strong> and
+          <strong>Actions: Read and write</strong>. Paste it below. It is stored only in this browser’s
+          <code>localStorage</code> — never in the repository or sent anywhere except GitHub’s API when you start a run or refresh status.
+          You can clear it any time, and you should delete the token on GitHub when you no longer need it.
+        </div>
+        <p class="hint">
+          Create a token:
+          <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub → Fine-grained personal access tokens</a>.
+        </p>
+        <div class="stack">
+          <label class="hint" for="token">Personal access token</label>
+          <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…" />
+          <div class="row wrap">
+            <button type="button" id="save-token">Save in this browser</button>
+            <button type="button" class="secondary" id="clear-token">Clear saved token</button>
+          </div>
+          <p class="status" id="token-status"></p>
+        </div>
+      </section>
+
+      <section class="card" style="margin-bottom: 16px">
+        <h2 style="margin: 0 0 8px; font-size: 1.15rem">2. Add text and start training</h2>
+        <p class="hint">
+          Plain text is enough — no special format required. For better chat replies, you can also write examples as
+          <code>User:</code> and <code>Assistant:</code> lines. Leave the text box empty if you only want to train longer on the current data.
+        </p>
+        <form id="train-form" class="stack">
+          <label class="hint" for="text">Paste text (optional)</label>
+          <textarea id="text" placeholder="User: Who made you?&#10;Assistant: Vihanga built me from scratch."></textarea>
+          <label class="hint" for="file">Or upload .txt files (optional)</label>
+          <input id="file" type="file" accept=".txt,text/plain" multiple />
+          <label class="hint" for="filename">File name prefix (optional)</label>
+          <input id="filename" type="text" placeholder="my-notes" />
+          <div class="settings" style="border: 0; padding: 0; margin: 0">
+            <label>
+              Minutes to train (1–330)
+              <input id="minutes" type="number" min="1" max="330" step="1" value="60" />
+            </label>
+            <label>
+              Mode
+              <select id="mode">
+                <option value="continue" selected>Continue from the current model</option>
+                <option value="fresh">Start a fresh model</option>
+              </select>
+            </label>
+          </div>
+          <button type="submit" id="start">Start training run</button>
+          <p class="status" id="form-status"></p>
+        </form>
+        <p class="hint">
+          Training runs on GitHub’s free CPU machines (no GPU, max 6 hours). A public repository has unlimited Actions minutes. It will be slow, but it works from your phone. After the run, the chat page updates when the site redeploys.
+        </p>
+      </section>
+
+      <section class="card">
+        <div class="toolbar">
+          <h2 style="margin: 0; font-size: 1.15rem">Recent training runs</h2>
+          <button type="button" class="secondary" id="refresh">Refresh</button>
+        </div>
+        <div id="runs" style="margin-top: 10px"></div>
+      </section>
+
+      <footer>
+        You can also add a file under <code>data/my_text/</code> in the GitHub app and run the Train workflow from the Actions tab.
+      </footer>
+    </div>
+    <script type="module" src="js/train.js"></script>
+  </body>
+</html>

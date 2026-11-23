@@ -1,0 +1,143 @@
+name: Train
+
+# Start a run from your phone or PC: Actions tab → Train → Run workflow.
+# Automatic training when you push files under data/my_text/ is left off on
+# purpose. Uncomment the push block below if you want it. Bot commits only
+# touch model/, samples/, and similar paths, so they will not retrigger it.
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "How many minutes to train (max 330, to stay under the 6-hour job cap)"
+        required: false
+        default: "60"
+        type: string
+      mode:
+        description: "continue = keep training the current model; fresh = start a new model"
+        required: false
+        default: "continue"
+        type: choice
+        options:
+          - continue
+          - fresh
+  # push:
+  #   paths:
+  #     - "data/my_text/**"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: train-own-gpt
+  cancel-in-progress: false
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install CPU PyTorch and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+          pip install numpy onnx onnxruntime
+
+      - name: Clamp training time
+        id: settings
+        env:
+          RAW_MINUTES: ${{ github.event.inputs.minutes }}
+          RAW_MODE: ${{ github.event.inputs.mode }}
+        run: |
+          python << 'PY' >> "$GITHUB_OUTPUT"
+          import os
+          raw = os.environ.get("RAW_MINUTES") or "60"
+          try:
+              n = int(float(str(raw).strip()))
+          except ValueError:
+              n = 60
+          n = max(1, min(n, 330))
+          mode = os.environ.get("RAW_MODE") or "continue"
+          if mode not in ("continue", "fresh"):
+              mode = "continue"
+          print(f"minutes={n}")
+          print(f"seconds={n * 60}")
+          print(f"mode={mode}")
+          PY
+          echo "Training minutes=$(grep ^minutes= "$GITHUB_OUTPUT" | cut -d= -f2) mode=$(grep ^mode= "$GITHUB_OUTPUT" | cut -d= -f2)"
+
+      - name: Prepare data (download TinyStories, include data/my_text)
+        run: python prepare_data.py
+
+      - name: Train
+        env:
+          OMP_NUM_THREADS: "4"
+        run: |
+          MODE="${{ steps.settings.outputs.mode }}"
+          SECONDS_LIMIT="${{ steps.settings.outputs.seconds }}"
+          FLAGS=(--max-wall-seconds "$SECONDS_LIMIT" --fresh-tokens --skip-full-ckpt)
+          if [ "$MODE" = "fresh" ]; then
+            echo "Starting a fresh model (random weights, existing tokenizer if present)."
+          else
+            echo "Continuing from the current model weights."
+            FLAGS+=(--resume)
+          fi
+          python train.py "${FLAGS[@]}"
+
+      - name: Export ONNX for the browser app
+        run: python export_onnx.py
+
+      - name: Generate sample chat and completions
+        run: python write_samples.py
+
+      - name: Commit updated model and samples
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add model/model.pt model/tokenizer.json model/model.onnx model/meta.json samples/latest.md
+          if git diff --cached --quiet; then
+            echo "No model changes to commit."
+            exit 0
+          fi
+          git commit -m "Train: update model after ${{ steps.settings.outputs.minutes }}-minute ${{ steps.settings.outputs.mode }} run"
+          # Rebase in case something else landed on main while we were training.
+          git pull --rebase origin "${{ github.ref_name }}"
+          git push origin "HEAD:${{ github.ref_name }}"
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site/model
+          cp -a web/. _site/
+          cp -f model/tokenizer.json model/model.onnx model/meta.json _site/model/ 2>/dev/null || true
+          ls -lh _site/model
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy-site:
+    needs: train
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,87 @@
+name: Chat
+
+# Talk to the model from your phone: Actions tab → Chat → Run workflow.
+# The reply is written to the job summary (open the run to read it).
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "Your message to the model"
+        required: true
+        default: "Hello"
+        type: string
+      temperature:
+        description: "Temperature (higher = more random)"
+        required: false
+        default: "0.8"
+        type: string
+      top_k:
+        description: "Top-k sampling"
+        required: false
+        default: "40"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  chat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install CPU PyTorch
+        run: |
+          python -m pip install --upgrade pip
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+          pip install numpy
+
+      - name: Run chat
+        id: chat
+        env:
+          USER_MESSAGE: ${{ github.event.inputs.message }}
+          TEMPERATURE: ${{ github.event.inputs.temperature }}
+          TOP_K: ${{ github.event.inputs.top_k }}
+        run: |
+          python - <<'PY'
+          import os, pathlib
+          from chat import main
+          # Rebuild argv for chat.py
+          import sys
+          msg = os.environ.get("USER_MESSAGE") or "Hello"
+          temp = os.environ.get("TEMPERATURE") or "0.8"
+          top_k = os.environ.get("TOP_K") or "40"
+          sys.argv = ["chat.py", "--message", msg, "--temperature", temp, "--top-k", top_k, "--max-tokens", "100"]
+          from io import StringIO
+          import contextlib
+          buf = StringIO()
+          with contextlib.redirect_stdout(buf):
+              main()
+          reply = buf.getvalue().strip() or "..."
+          pathlib.Path("chat_reply.txt").write_text(reply + "\n", encoding="utf-8")
+          print(reply)
+          PY
+
+      - name: Write job summary
+        run: |
+          {
+            echo "# own-gpt reply"
+            echo
+            echo "**You:** ${{ github.event.inputs.message }}"
+            echo
+            echo "**Assistant:**"
+            echo
+            echo '```'
+            cat chat_reply.txt
+            echo '```'
+            echo
+            echo "This is a small from-scratch model. Replies can be rough or wrong."
+          } >> "$GITHUB_STEP_SUMMARY"
