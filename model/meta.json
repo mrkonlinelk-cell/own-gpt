@@ -1,8 +1,8 @@
 {
-  "step": 1837,
-  "best_val": 2.053942883014679,
+  "step": 2710,
+  "best_val": 1.8785287261009216,
   "n_params": 12318720,
-  "val_loss": 2.053942883014679,
+  "val_loss": 1.8785287261009216,
   "train_loss": null,
   "vocab_size": 4096,
   "block_size": 256,

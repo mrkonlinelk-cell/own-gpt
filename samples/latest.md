@@ -1,11 +1,11 @@
 # Latest sample outputs
 
-Generated after a training run. Checkpoint: `model/model.pt` (step 1837).
+Generated after a training run. Checkpoint: `model/model.pt` (step 2710).
 
 - Parameters: 12318720
-- Val loss / best val: 2.053942883014679
+- Val loss / best val: 1.8785287261009216
 - Sampling: temperature 0.8, top-k 40, max tokens 80
-- Time (UTC): 2026-11-23 18:56:02Z
+- Time (UTC): 2026-11-24 03:21:22Z
 
 The writing is often rough. That is expected for a small model.
 
@@ -14,30 +14,28 @@ The writing is often rough. That is expected for a small model.
 ### 1. `Once upon a time`
 
 ```
-Once upon a time, there was an old cat named Tim. Tim loved to play outside and eat yummy soup. One day, Tim saw a big box in the attic. He thought it would be fun to fill the pot with food and make a big bowl.
-As he was playing, Tim saw his friend, a little girl named Lily. Lily was looking at the box. Tim was very curious about how to
+Once upon a time, there was an old cat named Tom. Tom liked to play outside and chase his ball. One day, Tom saw a big box in the yard. He thought it was a treasure.
+Tom tried to jump through the box, but it was too big. He jumped on the box and got stuck inside. But the box jumped in and got stuck. "Oh no! My ball is stuck
 ```
 
 ### 2. `Once upon a time, a little girl`
 
 ```
-Once upon a time, a little girl named Lily found a big, shiny coin in the room. She was very happy and took the coin to her mom.
-When they arrived at the kitchen, they saw many coins inside. Lily wanted the coin, but she did not know what it meant. She thought it was important.
-Lily put the coins on the shelf. She did not know what to do. She waited until the coin
+Once upon a time, a little girl named Amy found a big smile. She put on her mom's face and put on a big hat. Amy was very happy.
+Amy wanted to wear the hat on a coat to wear. She went down a chair, and her mom were talking. Amy put on her coat, but she did not want to come. She walked downstairs, but she did not want to be alone.
 ```
 
 ### 3. `There was a small dog`
 
 ```
-There was a small dog named Buddy. Buddy was a happy dog and could not run. Buddy saw Buddy and wanted to play too. Buddy tried to run, but Buddy was too scared.
-B Buddy's mom saw Buddy was not happy. She said, " Buddy, we need to tell everyone about the park!" Buddy listened. They walked and walked, and Buddy found a big tree. Buddy went home and told Buddy
+There was a small dog in the park. It was a big dog with a big smile on its head. The dog liked to play and run around. One day, the dog saw a big dog playing with a ball.
+The big dog wanted to play with the ball, so he tried to climb the fence. But he could not reach it. He wanted to be brave. So he found a big stick and would
 ```
 
 ### 4. `The little boy found`
 
 ```
-The little boy found a magic cat. The cat said, "I will grant you one wish." The boy was very surprised but happy. He said, "Thank you for your surprise I feel better."
-The magic cat and the magic cat became good friends. They played together every day and had lots of fun. The ugly cat was never lonely again.
+The little boy found a magic book. He did not know it was wrong. He put the book back in his bag. The little boy was very surprised. They both smiled.
 <|endoftext|>
 ```
 
@@ -45,13 +43,15 @@ The magic cat and the magic cat became good friends. They played together every 
 
 **User:** Hello
 
-**Assistant:** Hello! How can I help you today?
+**Assistant:** Hello! I can tell stories or answer simple questions.
 
 **User:** What is 2 plus 2?
 
-**Assistant:** 2 plus 2 is 10.
+**Assistant:** 2 plus 2 is 7.
 
 **User:** Tell me a short story about a cat
 
-**Assistant:** Lily had a tiny seed. She put it in the seed with the dirt on the dirt. She gave it water and watered it.
+**Assistant:** Lily liked to skip in the kitchen. She liked to play with her cars and go fast. She was very fast and slow. She had a bad day.
+One night, Lily saw a big box in the kitchen. She wanted to find out what was inside. She went close the box and found a small box. She was very curious.
+Lily opened the box and found a big chocolate
 
